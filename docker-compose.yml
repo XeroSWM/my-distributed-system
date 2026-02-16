@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # --- Base de Datos ---
+  database:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: taskmaster_db
+    volumes:
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  # --- Microservicios ---
+  service-auth:
+    build: ./apps/service-auth
+    environment:
+      DATABASE_URL: postgres://admin:password123@database:5432/taskmaster_db
+    networks:
+      - app-network
+    depends_on:
+      - database
+
+  service-core:
+    build: ./apps/service-core
+    environment:
+      DATABASE_URL: postgres://admin:password123@database:5432/taskmaster_db
+    networks:
+      - app-network
+    depends_on:
+      - database
+
+  service-dashboard:
+    build: ./apps/service-dashboard
+    environment:
+      DATABASE_URL: postgres://admin:password123@database:5432/taskmaster_db
+    networks:
+      - app-network
+    depends_on:
+      - database
+
+  # --- Frontend ---
+  frontend:
+    build: ./apps/frontend
+    ports:
+      - "5173:5173"
+    networks:
+      - app-network
+
+  # --- API Gateway (Nginx) ---
+  gateway:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      # Mapeamos el archivo exacto de tu estructura
+      - ./infra/docker/local/nginx.conf:/etc/nginx/nginx.conf
+    networks:
+      - app-network
+    depends_on:
+      - service-auth
+      - service-core
+      - service-dashboard
+      - frontend
+
+networks:
+  app-network:
+
+volumes:
+  pg_data:

@@ -1,7 +1,6 @@
-# 1. Buscar la última imagen de Ubuntu (AMI) automáticamente
 data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["099720109477"] # Canonical (Dueño oficial de Ubuntu)
+  owners      = ["099720109477"] # Canonical
 
   filter {
     name   = "name"
@@ -9,23 +8,22 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-# 2. Crear una llave SSH para entrar al servidor
 resource "aws_key_pair" "deployer" {
-  key_name   = "taskmaster-key"
+  # Usamos el nombre para que la llave sea única por módulo si es necesario, 
+  # o simplemente usamos un prefijo. Aquí reutilizamos la llave pero el nombre del recurso en AWS cambia.
+  key_name   = "deployer-key-${var.instance_name}" 
   public_key = var.public_key
 }
 
-# 3. La Instancia EC2 (El Servidor)
 resource "aws_instance" "web" {
   ami           = data.aws_ami.ubuntu.id
-  instance_type = "t2.micro" # Free Tier
+  instance_type = "t2.micro" # Capa gratuita
   subnet_id     = var.subnet_id
   
-  # Seguridad
   vpc_security_group_ids = [var.security_group_id]
   key_name               = aws_key_pair.deployer.key_name
 
-  # Script de inicio (Instala Docker automáticamente al encender)
+  # Script de inicio: Instala Docker automáticamente
   user_data = <<-EOF
               #!/bin/bash
               apt-get update
@@ -40,17 +38,19 @@ resource "aws_instance" "web" {
               EOF
 
   tags = {
-    Name = "TaskMaster-App-Server"
+    Name = var.instance_name  # <--- AQUÍ SE APLICA EL NOMBRE DINÁMICO
   }
 }
 
-# 4. IP Elástica (IP Pública Fija)
 resource "aws_eip" "web_ip" {
   instance = aws_instance.web.id
   domain   = "vpc"
+
+  tags = {
+    Name = "${var.instance_name}-IP"
+  }
 }
 
-# OUTPUT: La IP pública para entrar
 output "public_ip" {
   value = aws_eip.web_ip.public_ip
 }

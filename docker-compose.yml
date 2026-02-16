@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # --- API GATEWAY ---
+  gateway:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/docker/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - frontend
+      - auth-service
+      - core-service
+
+  # --- FRONTEND ---
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      - VITE_API_URL=http://localhost/api
+
+  # --- MICROSERVICIOS ---
+  auth-service:
+    build: ./apps/service-auth
+    environment:
+      - DB_HOST=postgres
+      - JWT_SECRET=dev_secret_123
+    depends_on:
+      - postgres
+
+  core-service:
+    build: ./apps/service-core
+    environment:
+      - DB_HOST=postgres
+    depends_on:
+      - postgres
+
+  dashboard-service:
+    build: ./apps/service-dashboard
+    environment:
+      - DB_HOST=postgres
+    depends_on:
+      - postgres
+
+  # --- BASE DE DATOS ---
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=root
+      - POSTGRES_DB=taskmaster_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql # Seeds iniciales
+
+volumes:
+  pgdata:

@@ -1,41 +1,40 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 
 function App() {
-  // 1. ESTADOS (Aquí se guardan los datos)
+  // 1. ESTADOS
   const [tasks, setTasks] = useState([]);
   const [stats, setStats] = useState(null);
   const [newTask, setNewTask] = useState('');
 
-  // 2. FUNCIONES PARA LLAMAR AL BACKEND
-
-  // A. Obtener tareas (Core Service)
-  const fetchTasks = async () => {
+  // 2. FUNCIONES SEGURAS (Usando useCallback para evitar errores del Linter)
+  
+  // A. Obtener tareas
+  const fetchTasks = useCallback(async () => {
     try {
       const res = await fetch('/api/core/tasks');
       const data = await res.json();
       setTasks(data);
     } catch (err) { console.error("Error Core:", err); }
-  };
+  }, []);
 
-  // B. Obtener estadísticas (Dashboard Service)
-  const fetchStats = async () => {
+  // B. Obtener estadísticas
+  const fetchStats = useCallback(async () => {
     try {
       const res = await fetch('/api/stats/summary');
       const data = await res.json();
       setStats(data);
     } catch (err) { console.error("Error Stats:", err); }
-  };
+  }, []);
 
-  // 3. EFECTO (Se ejecuta al cargar la página)
+  // 3. EFECTO DE CARGA INICIAL
+  // Ahora incluimos las funciones en el array [ ] y React será feliz
   useEffect(() => {
     fetchTasks();
     fetchStats();
-  }, []);
+  }, [fetchTasks, fetchStats]);
 
-  // 4. MANEJADORES DE EVENTOS
-
-  // Crear Tarea
+  // 4. HANDLERS (Eventos del usuario)
   const handleCreate = async () => {
     if (!newTask) return;
     try {
@@ -44,13 +43,13 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: newTask, project_id: 1 })
       });
-      setNewTask(''); // Limpiar input
-      fetchTasks();   // Recargar lista
-      fetchStats();   // Recargar contadores
+      setNewTask(''); 
+      // Recargamos los datos
+      fetchTasks();
+      fetchStats();
     } catch (err) { console.error("Error creating task:", err); }
   };
 
-  // Login Simulado
   const handleLogin = async () => {
     try {
       const res = await fetch('/api/auth/login', {
@@ -63,54 +62,47 @@ function App() {
     } catch (err) { console.error("Error Login:", err); }
   };
 
-  // 5. RENDERIZADO (Lo que se ve en pantalla)
+  // 5. RENDERIZADO
   return (
-    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+    <div style={{ padding: '20px' }}>
       <h1>🏰 TaskMaster Enterprise</h1>
       
-      {/* Tarjetas de Estadísticas */}
-      <div style={{ display: 'flex', gap: '20px', marginBottom: '30px', justifyContent: 'center' }}>
-        <div className="card" style={{ border: '1px solid #ccc', padding: '15px', borderRadius: '8px', minWidth: '150px' }}>
+      {/* TARJETAS DE MÉTRICAS */}
+      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+        <div className="card" style={{border: '1px solid #ccc', padding: '10px'}}>
           <h3>Usuarios</h3>
-          <p style={{ fontSize: '2em', margin: 0 }}>{stats?.total_users || 0}</p>
-          <small>(Auth Service)</small>
+          <p>{stats?.total_users || 0}</p>
         </div>
-        <div className="card" style={{ border: '1px solid #ccc', padding: '15px', borderRadius: '8px', minWidth: '150px' }}>
+        <div className="card" style={{border: '1px solid #ccc', padding: '10px'}}>
           <h3>Tareas</h3>
-          <p style={{ fontSize: '2em', margin: 0 }}>{stats?.total_tasks || 0}</p>
-          <small>(Dashboard Service)</small>
+          <p>{stats?.total_tasks || 0}</p>
         </div>
       </div>
 
       <hr />
 
-      {/* Sección Crear Tarea */}
-      <div style={{ margin: '20px 0' }}>
-        <h2>Mis Tareas (Core Service)</h2>
-        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+      {/* GESTIÓN DE TAREAS */}
+      <div>
+        <h2>Mis Tareas</h2>
+        <div style={{ marginBottom: '10px' }}>
           <input 
             value={newTask} 
             onChange={e => setNewTask(e.target.value)} 
             placeholder="Nueva tarea..." 
-            style={{ padding: '10px', width: '300px' }}
           />
-          <button onClick={handleCreate} style={{ padding: '10px 20px' }}>Agregar</button>
+          <button onClick={handleCreate}>Agregar</button>
         </div>
-
-        {/* Lista de Tareas */}
-        <ul style={{ listStyle: 'none', padding: 0, marginTop: '20px' }}>
+        <ul>
           {tasks.map(t => (
-            <li key={t.id} style={{ background: '#f5f5f5', color: '#333', margin: '5px 0', padding: '10px', borderRadius: '4px', textAlign: 'left' }}>
-              {t.title} - <strong>{t.status}</strong>
-            </li>
+            <li key={t.id}>{t.title} - <strong>{t.status}</strong></li>
           ))}
         </ul>
       </div>
 
       <hr />
       
-      <button onClick={handleLogin} style={{ background: '#444', marginTop: '20px' }}>
-        Test Login (Auth Service)
+      <button onClick={handleLogin} style={{background: '#333', color: 'white', marginTop: '20px'}}>
+        Test Login
       </button>
     </div>
   )

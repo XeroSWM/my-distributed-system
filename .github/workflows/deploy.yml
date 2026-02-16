@@ -1,15 +1,15 @@
 name: CI/CD Pipeline - Build & Push
 
-# ¿Cuándo se ejecuta? Al hacer push a la rama main
+# 1. CONFIGURACIÓN DE TRIGGERS
+# Aquí definimos que escuche tanto a 'main' como a 'qa'
 on:
   push:
-    branches: [ "qa" ]
+    branches: [ "main", "qa" ]
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     
-    # Estrategia Matrix: Ejecuta el mismo paso para múltiples servicios en paralelo
     strategy:
       matrix:
         include:
@@ -27,27 +27,38 @@ jobs:
             image-name: taskmaster-frontend
 
     steps:
-      # 1. Descargar el código del repositorio
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Conectarse a Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 3. Configurar Docker Buildx (necesario para builds modernos)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 4. Construir y Subir la imagen
+      # --- NUEVO PASO: Generador de Tags Inteligente ---
+      # Esto decide qué nombre ponerle a la imagen según la rama
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.image-name }}
+          tags: |
+            # Regla 1: Si es la rama 'main', ponle el tag 'latest'
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # Regla 2: Si es la rama 'qa', ponle el tag 'qa'
+            type=raw,value=qa,enable=${{ github.ref == 'refs/heads/qa' }}
+
+      # 4. Construir y Subir
       - name: Build and Push ${{ matrix.service }}
         uses: docker/build-push-action@v5
         with:
           context: ./${{ matrix.folder }}
           file: ./${{ matrix.folder }}/Dockerfile
           push: true
-          # La imagen se llamará: tu_usuario/taskmaster-auth:latest
-          tags: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.image-name }}:latest
+          # AQUÍ ESTÁ EL CAMBIO CLAVE:
+          # Usamos los tags generados por el paso anterior
+          tags: ${{ steps.meta.outputs.tags }}

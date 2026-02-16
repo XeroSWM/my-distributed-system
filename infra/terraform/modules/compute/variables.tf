@@ -18,3 +18,9 @@ variable "instance_name" {
   description = "Nombre que tendrá el servidor en AWS"
   type        = string
 }
+
+variable "user_data_script" {
+  description = "Script bash para configurar el servidor al inicio"
+  type        = string
+  default     = ""
+}

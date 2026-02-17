@@ -5,10 +5,11 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: true, // Esto es CRÍTICO para Docker
-    port: 5173,
+    host: true,      // <--- ¡ESTA ES LA LÍNEA MÁGICA!
+    port: 3000,      // Asegúrate que sea el 3000
+    strictPort: true,
     watch: {
-      usePolling: true // Necesario para que el hot-reload funcione en Windows/Docker
+      usePolling: true // A veces necesario en Docker
     }
   }
 })

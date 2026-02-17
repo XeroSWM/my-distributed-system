@@ -52,6 +52,22 @@ resource "aws_security_group" "db_sg" {
     protocol        = "tcp"
     security_groups = [aws_security_group.web_sg.id]
   }
+
+  # Frontend alternativo / React Dev
+  ingress {
+    from_port   = 3000
+    to_port     = 3003   # Abrimos del 3000 al 3003 de un golpe (Frontend + Microservicios)
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  # Vite default (por si acaso)
+  ingress {
+    from_port   = 5173
+    to_port     = 5173
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
 # OUTPUTS

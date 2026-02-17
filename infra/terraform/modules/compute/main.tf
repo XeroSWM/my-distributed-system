@@ -53,3 +53,7 @@ resource "aws_eip" "web_ip" {
 output "public_ip" {
   value = aws_eip.web_ip.public_ip
 }
+
+output "public_dns" {
+  value = aws_instance.web.public_dns
+}

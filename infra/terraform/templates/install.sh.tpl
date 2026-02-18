@@ -2,6 +2,16 @@
 set -e
 
 # ---------------------------------------------------------
+# 0. TRUCO DE MAGIA: AUMENTAR MEMORIA (SWAP)
+# ---------------------------------------------------------
+# Esto evita que el servidor se muera compilando el Frontend
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
+
+# ---------------------------------------------------------
 # 1. INSTALAR DOCKER
 # ---------------------------------------------------------
 apt-get update
@@ -24,31 +34,19 @@ cd my-distributed-system
 chown -R ubuntu:ubuntu /home/ubuntu/my-distributed-system
 
 # ---------------------------------------------------------
-# 3. CONFIGURAR VARIABLES DE ENTORNO
+# 3. CREAR ARCHIVO .ENV (Con las IPs reales)
 # ---------------------------------------------------------
-
-# A) Crear el archivo .env global (para los backends)
 cat <<EOF > .env
 ${env_file_content}
 EOF
 
-# B) ESTRATEGIA SEGURA PARA EL FRONTEND:
-# Escribimos el .env directamente dentro de la carpeta del frontend.
-# Vite leerá este archivo automáticamente al hacer el build.
-if [ -d "apps/frontend" ]; then
-  echo "Configurando .env del Frontend..."
-  cp .env apps/frontend/.env
-  
-  # IMPORTANTE: Borramos .dockerignore si existe para asegurar 
-  # que Docker COPIE el archivo .env dentro de la imagen.
-  rm -f apps/frontend/.dockerignore
-fi
-
 # ---------------------------------------------------------
-# 4. CONFIGURAR DOCKER FILES (Sobrescribir para garantizar éxito)
+# 4. CONFIGURAR DOCKER FILES
 # ---------------------------------------------------------
 
-# A) Docker Compose (Simplificado: Sin ARGS)
+# A) Docker Compose
+# Usamos $${VAR} para decirle a Terraform que NO toque esas variables,
+# Docker las leerá del archivo .env que acabamos de crear arriba.
 cat <<EOF > docker-compose.yml
 version: '3.8'
 services:
@@ -105,7 +103,12 @@ services:
       - database
 
   frontend:
-    build: ./apps/frontend
+    build:
+      context: ./apps/frontend
+      args:
+        - VITE_AUTH_URL=$${VITE_AUTH_URL}
+        - VITE_CORE_URL=$${VITE_CORE_URL}
+        - VITE_DASHBOARD_URL=$${VITE_DASHBOARD_URL}
     ports:
       - "80:3000"
     networks:
@@ -119,7 +122,7 @@ networks:
     driver: bridge
 EOF
 
-# B) Vite Config (Asegurar acceso externo)
+# B) Vite Config
 if [ -d "apps/frontend" ]; then
 cat <<'EOF' > apps/frontend/vite.config.js
 import { defineConfig } from 'vite'
@@ -139,16 +142,25 @@ export default defineConfig({
 })
 EOF
 
-# C) Dockerfile del Frontend (Simplificado)
-# Ya no usa ARGS, confía en que el .env está en la carpeta y se copia.
+# C) Dockerfile del Frontend
+# Este Dockerfile recibe los ARGS y los convierte en ENV para el build
 cat <<'EOF' > apps/frontend/Dockerfile
 FROM node:18-alpine
 WORKDIR /app
+
+# 1. Definimos que esperamos estos argumentos desde docker-compose
+ARG VITE_AUTH_URL
+ARG VITE_CORE_URL
+ARG VITE_DASHBOARD_URL
+
+# 2. Los convertimos en variables de entorno fijas
+ENV VITE_AUTH_URL=$VITE_AUTH_URL
+ENV VITE_CORE_URL=$VITE_CORE_URL
+ENV VITE_DASHBOARD_URL=$VITE_DASHBOARD_URL
+
 COPY package*.json ./
 RUN npm install
-# Al copiar todo, se copia también el .env que creamos arriba
 COPY . .
-# Vite leerá el .env aquí durante el build
 RUN npm run build
 EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
@@ -158,5 +170,4 @@ fi
 # ---------------------------------------------------------
 # 5. ARRANCAR EL SERVICIO
 # ---------------------------------------------------------
-# --build fuerza a que se vuelva a crear la imagen con el nuevo .env
 docker compose up -d --build ${service_name}

@@ -90,33 +90,21 @@ module "server_dashboard" {
 
 # --- 4. Frontend ---
 module "server_frontend" {
-  # ... resto de config ...
-  
-  user_data_script = templatefile("${path.module}/templates/install.sh.tpl", {
-    service_name     = "frontend"
-    env_file_content = <<-EOT
-      # AHORA EL FRONTEND APUNTA AL GATEWAY
-      VITE_AUTH_URL=http://${module.gateway.public_ip}/api/auth
-      VITE_CORE_URL=http://${module.gateway.public_ip}/api/core
-      VITE_DASHBOARD_URL=http://${module.gateway.public_ip}/api/dashboard
-    EOT
-  })
-}
-
-# --- 5. API GATEWAY (El Director de Orquesta) ---
-module "gateway" {
   source            = "./modules/compute"
   subnet_id         = module.networking.public_subnets[0]
   security_group_id = module.security.web_sg_id
-  instance_name     = "TM-API-Gateway"
+  instance_name     = "TM-Frontend"
   key_name          = aws_key_pair.taskmaster_key.key_name
 
-  # Usamos un script diferente para el Gateway
-  user_data_script = templatefile("${path.module}/templates/install_gateway.sh.tpl", {
-    # Pasamos las IPs privadas o públicas de los otros servidores
-    auth_ip      = module.server_auth.private_ip # Mejor usar IP privada si están en la misma VPC
-    core_ip      = module.server_core.private_ip
-    dashboard_ip = module.server_dashboard.private_ip
+  user_data_script = templatefile("${path.module}/templates/install.sh.tpl", {
+    service_name     = "frontend"
+    # ESTO EVITA EL ERROR DE ARGUMENTOS:
+    # Metemos las variables VITE dentro del contenido del .env directamente
+    env_file_content = <<-EOT
+      VITE_AUTH_URL=http://${module.server_auth.public_ip}:3001
+      VITE_CORE_URL=http://${module.server_core.public_ip}:3002
+      VITE_DASHBOARD_URL=http://${module.server_dashboard.public_ip}:3003
+    EOT
   })
 }
 

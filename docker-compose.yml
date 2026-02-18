@@ -8,17 +8,22 @@ services:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: password123
       POSTGRES_DB: taskmaster_db
+    ports:
+      - "5432:5432"
     volumes:
       - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
       - pg_data:/var/lib/postgresql/data
     networks:
       - app-network
 
-  # --- Microservicios ---
+  # --- Microservicios (Exponemos puertos para pruebas directas) ---
   service-auth:
     build: ./apps/service-auth
+    ports:
+      - "3001:3001"
     environment:
       DATABASE_URL: postgres://admin:password123@database:5432/taskmaster_db
+      PORT: 3001
     networks:
       - app-network
     depends_on:
@@ -26,8 +31,11 @@ services:
 
   service-core:
     build: ./apps/service-core
+    ports:
+      - "3002:3002"
     environment:
       DATABASE_URL: postgres://admin:password123@database:5432/taskmaster_db
+      PORT: 3002
     networks:
       - app-network
     depends_on:
@@ -35,20 +43,27 @@ services:
 
   service-dashboard:
     build: ./apps/service-dashboard
+    ports:
+      - "3003:3003"
     environment:
       DATABASE_URL: postgres://admin:password123@database:5432/taskmaster_db
+      PORT: 3003
     networks:
       - app-network
     depends_on:
       - database
 
-  # --- Frontend ---
+  # --- Frontend (CON INYECCIÓN DE VARIABLES) ---
   frontend:
-    build: ./apps/frontend
+    build:
+      context: ./apps/frontend
+      # PASAMOS LAS IPs COMO ARGUMENTOS DE CONSTRUCCIÓN
+      args:
+        - VITE_AUTH_URL=http://100.28.113.132:3001
+        - VITE_CORE_URL=http://3.94.232.24:3002
+        - VITE_DASHBOARD_URL=http://34.204.212.17:3003
     ports:
-      - "3000:3000"
-    env_file:
-      - .env
+      - "80:3000"
     networks:
       - app-network
 
@@ -58,7 +73,6 @@ services:
     ports:
       - "8080:80"
     volumes:
-      # Mapeamos el archivo exacto de tu estructura
       - ./infra/docker/local/nginx.conf:/etc/nginx/nginx.conf
     networks:
       - app-network
@@ -70,6 +84,7 @@ services:
 
 networks:
   app-network:
+    driver: bridge
 
 volumes:
   pg_data:

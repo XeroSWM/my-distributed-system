@@ -1,48 +1,64 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline - Build & Push
 
+# 1. CONFIGURACIÓN DE TRIGGERS
+# Aquí definimos que escuche tanto a 'main' como a 'qa'
 on:
   push:
-    branches: [ main ]
+    branches: [ "main", "qa" ]
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          
-      - name: Build and Push Auth Service
-        run: |
-          docker build -t myuser/auth-service:latest ./apps/service-auth
-          docker push myuser/auth-service:latest
-          
-      # ... Repetir para Core, Dashboard y Frontend
+    
+    strategy:
+      matrix:
+        include:
+          - service: service-auth
+            folder: apps/service-auth
+            image-name: taskmaster-auth
+          - service: service-core
+            folder: apps/service-core
+            image-name: taskmaster-core
+          - service: service-dashboard
+            folder: apps/service-dashboard
+            image-name: taskmaster-dashboard
+          - service: frontend
+            folder: apps/frontend
+            image-name: taskmaster-frontend
 
-  terraform-deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./infra/terraform
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        
-      - name: Terraform Init
-        run: terraform init
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          
-      - name: Terraform Apply
-        run: terraform apply -auto-approve
-        env:
-          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
-          # ... Credenciales AWS
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --- NUEVO PASO: Generador de Tags Inteligente ---
+      # Esto decide qué nombre ponerle a la imagen según la rama
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.image-name }}
+          tags: |
+            # Regla 1: Si es la rama 'main', ponle el tag 'latest'
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # Regla 2: Si es la rama 'qa', ponle el tag 'qa'
+            type=raw,value=qa,enable=${{ github.ref == 'refs/heads/qa' }}
+
+      # 4. Construir y Subir
+      - name: Build and Push ${{ matrix.service }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.folder }}
+          file: ./${{ matrix.folder }}/Dockerfile
+          push: true
+          # AQUÍ ESTÁ EL CAMBIO CLAVE:
+          # Usamos los tags generados por el paso anterior
+          tags: ${{ steps.meta.outputs.tags }}

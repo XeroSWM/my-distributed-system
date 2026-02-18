@@ -1,14 +1,19 @@
 #!/bin/bash
 set -e
 
-# 0. MEMORIA SWAP (Anti-Caídas)
+# ---------------------------------------------------------
+# 0. TRUCO DE MAGIA: AUMENTAR MEMORIA (SWAP)
+# ---------------------------------------------------------
+# Vital para que t2.micro no se muera compilando
 fallocate -l 2G /swapfile
 chmod 600 /swapfile
 mkswap /swapfile
 swapon /swapfile
 echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
 
+# ---------------------------------------------------------
 # 1. INSTALAR DOCKER
+# ---------------------------------------------------------
 apt-get update
 apt-get install -y ca-certificates curl gnupg git
 install -m 0755 -d /etc/apt/keyrings
@@ -19,28 +24,38 @@ apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 usermod -aG docker ubuntu
 
+# ---------------------------------------------------------
 # 2. CLONAR EL REPOSITORIO (RAMA QA)
+# ---------------------------------------------------------
 cd /home/ubuntu
 rm -rf my-distributed-system
 
-# --- AQUÍ ESTÁ EL CAMBIO CLAVE ---
-# Usamos "-b qa" para bajar solo esa rama
+# CAMBIO 1: Clonamos la rama 'qa'
 git clone -b qa https://github.com/XeroSWM/my-distributed-system.git
 
 cd my-distributed-system
 chown -R ubuntu:ubuntu /home/ubuntu/my-distributed-system
 
-# 3. CREAR ARCHIVO .ENV GLOBAL
+# ---------------------------------------------------------
+# 3. CREAR ARCHIVO .ENV (Con las IPs reales)
+# ---------------------------------------------------------
 cat <<EOF > .env
 ${env_file_content}
 EOF
 
-# 4. CONFIGURAR DOCKER FILES (Dinámicos)
+# ---------------------------------------------------------
+# 4. CONFIGURAR DOCKER FILES
+# ---------------------------------------------------------
+
+# A) Docker Compose
+# CAMBIO 2: Agregamos el servicio "database" localmente
 cat <<EOF > docker-compose.yml
 version: '3.8'
 services:
+  # --- BASE DE DATOS LOCAL (GRATIS Y SIN PERMISOS DE AWS) ---
   database:
     image: postgres:15-alpine
+    restart: always
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: password123
@@ -58,6 +73,7 @@ services:
     ports:
       - "3001:3001"
     environment:
+      # CAMBIO 3: Apuntamos al contenedor 'database' local
       DATABASE_URL: postgres://admin:password123@database:5432/taskmaster_db
       JWT_SECRET: secreto_super_seguro
       PORT: 3001
@@ -94,7 +110,7 @@ services:
   api-gateway:
     build: ./apps/api-gateway
     ports:
-      - "80:8000"
+      - "80:8000" # Exponemos el puerto 80 del servidor
     networks:
       - app-network
 
@@ -118,7 +134,7 @@ networks:
     driver: bridge
 EOF
 
-# Vite Config (Frontend)
+# B) Vite Config (Asegurar acceso externo)
 if [ -d "apps/frontend" ]; then
 cat <<'EOF' > apps/frontend/vite.config.js
 import { defineConfig } from 'vite'
@@ -138,16 +154,21 @@ export default defineConfig({
 })
 EOF
 
-# Dockerfile Frontend
+# C) Dockerfile del Frontend
 cat <<'EOF' > apps/frontend/Dockerfile
 FROM node:18-alpine
 WORKDIR /app
+
+# Definimos argumentos de construcción
 ARG VITE_AUTH_URL
 ARG VITE_CORE_URL
 ARG VITE_DASHBOARD_URL
+
+# Los convertimos en variables de entorno
 ENV VITE_AUTH_URL=$VITE_AUTH_URL
 ENV VITE_CORE_URL=$VITE_CORE_URL
 ENV VITE_DASHBOARD_URL=$VITE_DASHBOARD_URL
+
 COPY package*.json ./
 RUN npm install
 COPY . .
@@ -157,5 +178,8 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
 EOF
 fi
 
+# ---------------------------------------------------------
 # 5. ARRANCAR EL SERVICIO
+# ---------------------------------------------------------
+# --build fuerza a crear la imagen con los cambios nuevos
 docker compose up -d --build ${service_name}

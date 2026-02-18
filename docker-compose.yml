@@ -59,9 +59,9 @@ services:
       context: ./apps/frontend
       # PASAMOS LAS IPs COMO ARGUMENTOS DE CONSTRUCCIÓN
       args:
-        - VITE_AUTH_URL=http://100.28.113.132:3001
-        - VITE_CORE_URL=http://3.94.232.24:3002
-        - VITE_DASHBOARD_URL=http://34.204.212.17:3003
+        - VITE_AUTH_URL=${VITE_AUTH_URL}
+        - VITE_CORE_URL=${VITE_CORE_URL}
+        - VITE_DASHBOARD_URL=${VITE_DASHBOARD_URL}
     ports:
       - "80:3000"
     networks:

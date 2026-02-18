@@ -1,16 +1,19 @@
-# Archivo: infra/terraform/modules/compute/outputs.tf
-
-# Esto permite que el main.tf principal pueda leer la IP
+# IP pública (Elastic IP)
 output "public_ip" {
   value = aws_eip.web_ip.public_ip
 }
 
-# Esto permite que el main.tf principal pueda leer el DNS
+# DNS público
 output "public_dns" {
   value = aws_eip.web_ip.public_dns
 }
 
-# Esto permite que el main.tf sepa el ID de la máquina
+# ID de la instancia
 output "instance_id" {
   value = aws_instance.web.id
+}
+
+# 🔥 NUEVO: IP privada (para comunicación interna en la VPC)
+output "private_ip" {
+  value = aws_instance.web.private_ip
 }

@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e # Si algo falla, el script se detiene (para debugging)
+set -e
 
 # ---------------------------------------------------------
 # 1. INSTALAR DOCKER
@@ -18,16 +18,38 @@ usermod -aG docker ubuntu
 # 2. CLONAR EL REPOSITORIO
 # ---------------------------------------------------------
 cd /home/ubuntu
+rm -rf my-distributed-system
 git clone https://github.com/XeroSWM/my-distributed-system.git
 cd my-distributed-system
 chown -R ubuntu:ubuntu /home/ubuntu/my-distributed-system
 
 # ---------------------------------------------------------
-# 3. CORREGIR ARCHIVOS (SOBRESCRIBIR CON VERSIONES BUENAS)
+# 3. CONFIGURAR VARIABLES DE ENTORNO
 # ---------------------------------------------------------
 
-# A) Docker Compose (Con puertos abiertos 3001, 3002, etc.)
-cat <<'EOF' > docker-compose.yml
+# A) Crear el archivo .env global (para los backends)
+cat <<EOF > .env
+${env_file_content}
+EOF
+
+# B) ESTRATEGIA SEGURA PARA EL FRONTEND:
+# Escribimos el .env directamente dentro de la carpeta del frontend.
+# Vite leerá este archivo automáticamente al hacer el build.
+if [ -d "apps/frontend" ]; then
+  echo "Configurando .env del Frontend..."
+  cp .env apps/frontend/.env
+  
+  # IMPORTANTE: Borramos .dockerignore si existe para asegurar 
+  # que Docker COPIE el archivo .env dentro de la imagen.
+  rm -f apps/frontend/.dockerignore
+fi
+
+# ---------------------------------------------------------
+# 4. CONFIGURAR DOCKER FILES (Sobrescribir para garantizar éxito)
+# ---------------------------------------------------------
+
+# A) Docker Compose (Simplificado: Sin ARGS)
+cat <<EOF > docker-compose.yml
 version: '3.8'
 services:
   database:
@@ -97,7 +119,7 @@ networks:
     driver: bridge
 EOF
 
-# B) Vite Config (CORREGIDO con allowedHosts para AWS)
+# B) Vite Config (Asegurar acceso externo)
 if [ -d "apps/frontend" ]; then
 cat <<'EOF' > apps/frontend/vite.config.js
 import { defineConfig } from 'vite'
@@ -109,25 +131,32 @@ export default defineConfig({
     host: true,
     port: 3000,
     strictPort: true,
-    allowedHosts: true,
+    allowedHosts: true, 
     watch: {
       usePolling: true
     }
   }
 })
 EOF
-fi
 
-# ---------------------------------------------------------
-# 4. CREAR ARCHIVO .ENV PERSONALIZADO
-# ---------------------------------------------------------
-# Terraform inyectará aquí el contenido específico de cada servidor
-cat <<EOF > .env
-${env_file_content}
+# C) Dockerfile del Frontend (Simplificado)
+# Ya no usa ARGS, confía en que el .env está en la carpeta y se copia.
+cat <<'EOF' > apps/frontend/Dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+# Al copiar todo, se copia también el .env que creamos arriba
+COPY . .
+# Vite leerá el .env aquí durante el build
+RUN npm run build
+EXPOSE 3000
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
 EOF
+fi
 
 # ---------------------------------------------------------
 # 5. ARRANCAR EL SERVICIO
 # ---------------------------------------------------------
-# Terraform inyectará aquí qué servicio arrancar (frontend, service-auth, etc)
+# --build fuerza a que se vuelva a crear la imagen con el nuevo .env
 docker compose up -d --build ${service_name}

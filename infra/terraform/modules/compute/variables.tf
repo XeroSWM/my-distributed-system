@@ -1,26 +1,32 @@
 variable "subnet_id" {
-  description = "La Subnet donde vivirá el servidor"
+  description = "ID de la Subnet donde se creará el servidor"
   type        = string
 }
 
 variable "security_group_id" {
-  description = "El firewall (Security Group) a usar"
+  description = "ID del Security Group (Firewall) a asignar"
   type        = string
 }
 
 variable "public_key" {
-  description = "Tu llave pública SSH"
+  description = "La llave pública SSH para acceder al servidor"
   type        = string
 }
 
-# --- NUEVA VARIABLE ---
 variable "instance_name" {
-  description = "Nombre que tendrá el servidor en AWS"
+  description = "Nombre (Tag Name) que tendrá el servidor en AWS"
   type        = string
 }
 
 variable "user_data_script" {
-  description = "Script bash para configurar el servidor al inicio"
+  description = "Script Bash de inicio (User Data) para configurar Docker"
   type        = string
   default     = ""
+}
+
+# --- NUEVA: Para poder cambiar de tamaño fácil ---
+variable "instance_type" {
+  description = "Tipo de instancia EC2. Recomendado: t2.medium para Docker/Node"
+  type        = string
+  default     = "t2.medium"
 }

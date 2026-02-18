@@ -8,8 +8,10 @@ variable "security_group_id" {
   type        = string
 }
 
-variable "public_key" {
-  description = "La llave pública SSH para acceder al servidor"
+# (ELIMINADO: variable "public_key") 
+# (AGREGADO: variable "key_name")
+variable "key_name" {
+  description = "Nombre de la llave SSH ya existente en AWS (creada en root)"
   type        = string
 }
 

@@ -3,6 +3,15 @@ provider "aws" {
 }
 
 # =========================================================================
+#  LLAVE SSH (Incrustada directamente para que no se pierda)
+# =========================================================================
+resource "aws_key_pair" "taskmaster_key" {
+  key_name   = "taskmaster_key"
+  # AQUÍ ESTÁ TU LLAVE SEGURA
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDkTTC3g1VKkXnrNDjXbHMl6AeNlfKurCHLWF06sIbPtIojfnyGdUq56Ci7Gie1KS5Rskhs8CbzwkXSwxUNu4UYlKxJAC5aoXfUdswEk5zdjUruS1u1cfC0FIz3n55s85fw3KoU54kxpli5vk+VbKfGbs3CpJetgv7Smbw3GtS6Nf1Qv/w/siSiV2DMNXnh6OwRboK6gvvAUk2VpWgKRI6hLwTCNm/mUdxIe9WpKP6myV/jg3Ycbns/jNylky+WT+xlI+YHYrZULv0H0VhF2NOgLlK8OlMg1do/uS7RXyYCPC0GltvcpUiZ5i57yWCDztXAbPmkqgSH8wcQ/5YAi2sMhl6AHKziMqnRER6BBFqP6IA/8O1d505d8M2UGAyN1somhlS9T/8XIwAZZsppRgZRUFcrgNG4tjRnSaQEbRpIwCvyik340Jgi56QAeI0GWku0Bq28toDXZfbvPsed0gLradbXzGUf4sqi5lVgHQmdvQE/1WXZ3kfB5XJjTqCCA+EHuiA9ZlKUKutHq03r9v784Z5WcgNZUc0fOFOPQv99GcjkUGQEa6wPDMYeWgxccSrFZGKbbCKIxeGUJbOfZEYWW6865gXqKZqXzGDWzy80rLKoHsU3lWXokCEx/Zdo7TzAReD1stgUGtNsD/bqGJzpL9ocq9+wHfx52KPnYEXpWQ== admin@DESKTOP-G2UPF9K"
+}
+
+# =========================================================================
 #  MÓDULOS DE INFRAESTRUCTURA
 # =========================================================================
 
@@ -22,7 +31,7 @@ module "database" {
 }
 
 # =========================================================================
-#  SERVIDORES (Usando la Plantilla install.sh.tpl)
+#  SERVIDORES (Usando la Llave Quemada y Template Install)
 # =========================================================================
 
 # --- 1. Servicio Auth ---
@@ -30,10 +39,11 @@ module "server_auth" {
   source            = "./modules/compute"
   subnet_id         = module.networking.public_subnets[0]
   security_group_id = module.security.web_sg_id
-  public_key        = var.my_public_ssh_key
   instance_name     = "TM-Auth-Service"
+  
+  # CAMBIO CLAVE: Usamos el nombre de la llave creada arriba
+  key_name          = aws_key_pair.taskmaster_key.key_name
 
-  # Enviamos las variables a la plantilla
   user_data_script = templatefile("${path.module}/templates/install.sh.tpl", {
     service_name     = "service-auth"
     env_file_content = <<-EOT
@@ -49,8 +59,9 @@ module "server_core" {
   source            = "./modules/compute"
   subnet_id         = module.networking.public_subnets[0]
   security_group_id = module.security.web_sg_id
-  public_key        = var.my_public_ssh_key
   instance_name     = "TM-Core-Service"
+  
+  key_name          = aws_key_pair.taskmaster_key.key_name
 
   user_data_script = templatefile("${path.module}/templates/install.sh.tpl", {
     service_name     = "service-core"
@@ -67,8 +78,9 @@ module "server_dashboard" {
   source            = "./modules/compute"
   subnet_id         = module.networking.public_subnets[0]
   security_group_id = module.security.web_sg_id
-  public_key        = var.my_public_ssh_key
   instance_name     = "TM-Dashboard-Service"
+  
+  key_name          = aws_key_pair.taskmaster_key.key_name
 
   user_data_script = templatefile("${path.module}/templates/install.sh.tpl", {
     service_name     = "service-dashboard"
@@ -84,11 +96,13 @@ module "server_frontend" {
   source            = "./modules/compute"
   subnet_id         = module.networking.public_subnets[0]
   security_group_id = module.security.web_sg_id
-  public_key        = var.my_public_ssh_key
   instance_name     = "TM-Frontend"
+  
+  key_name          = aws_key_pair.taskmaster_key.key_name
 
   user_data_script = templatefile("${path.module}/templates/install.sh.tpl", {
     service_name     = "frontend"
+    # ESTO LLENA EL .ENV DINÁMICO QUE VIMOS ANTES
     env_file_content = <<-EOT
       VITE_AUTH_URL=http://${module.server_auth.public_ip}:3001
       VITE_CORE_URL=http://${module.server_core.public_ip}:3002

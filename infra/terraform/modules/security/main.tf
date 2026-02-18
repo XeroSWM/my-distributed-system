@@ -1,83 +1,115 @@
-variable "vpc_id" {} # Recibe la ID de la VPC
+variable "vpc_id" {
+  description = "ID de la VPC donde se crearán los grupos de seguridad"
+  type        = string
+}
 
-# 1. Security Group para Servidores Web (EC2: Frontend, Auth, Core, Dashboard)
+# =================================================================
+# 1. SECURITY GROUP PARA APLICACIONES WEB (Frontend y Backends)
+# =================================================================
 resource "aws_security_group" "web_sg" {
   name        = "taskmaster-web-sg"
-  description = "Permitir HTTP, SSH y trafico de microservicios"
+  description = "Permite HTTP, SSH y Puertos de Microservicios"
   vpc_id      = var.vpc_id
 
-  # Puerto 80: Para entrar sin escribir puerto en la URL (Redirección a Docker)
+  # --- ACCESO ESTÁNDAR ---
+  
+  # 1. SSH (Para que puedas entrar a administrar)
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Puerto 22: Para que puedas entrar por SSH
-  ingress {
+    description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Puerto 3000 al 3003: Acceso directo a Frontend y Microservicios
+  # 2. HTTP (Para ver el Frontend en el puerto 80)
   ingress {
-    from_port   = 3000
+    description = "HTTP Frontend"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # --- ACCESO A MICROSERVICIOS (LO QUE FALTABA) ---
+
+  # 3. Auth Service (Puerto 3001)
+  ingress {
+    description = "API Auth"
+    from_port   = 3001
+    to_port     = 3001
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # 4. Core Service (Puerto 3002)
+  ingress {
+    description = "API Core"
+    from_port   = 3002
+    to_port     = 3002
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # 5. Dashboard Service (Puerto 3003)
+  ingress {
+    description = "API Dashboard"
+    from_port   = 3003
     to_port     = 3003
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Puerto 8080: Gateway / Nginx
-  ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Puerto 5173: Por si acaso usas el modo dev de Vite
-  ingress {
-    from_port   = 5173
-    to_port     = 5173
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  
-  # Salida: Permitir que el servidor descargue cosas de internet
+  # --- SALIDA (Egress) ---
+  # Permitir que el servidor descargue cosas de internet (Docker, Updates, etc.)
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = {
+    Name = "taskmaster-web-sg"
+  }
 }
 
-# 2. Security Group para Base de Datos (RDS / Postgres Docker)
+# =================================================================
+# 2. SECURITY GROUP PARA LA BASE DE DATOS
+# =================================================================
 resource "aws_security_group" "db_sg" {
   name        = "taskmaster-db-sg"
-  description = "Permitir acceso solo desde los servidores Web"
+  description = "Permite acceso a PostgreSQL solo desde los servidores web"
   vpc_id      = var.vpc_id
 
-  # Entrada: Solo permite el puerto 5432 si viene de una de nuestras EC2
+  # Solo permitimos tráfico que venga del Security Group "web_sg"
+  # Esto es seguridad de alto nivel: Nadie de internet puede tocar tu BD.
   ingress {
+    description     = "PostgreSQL from Web Servers"
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.web_sg.id]
   }
+  
+  # (Opcional) Si quieres conectarte desde TU casa con DBeaver/PgAdmin, 
+  # descomenta esto, pero es inseguro dejarlo abierto al mundo (0.0.0.0/0).
+  # ingress {
+  #   description = "PostgreSQL Public Access"
+  #   from_port   = 5432
+  #   to_port     = 5432
+  #   protocol    = "tcp"
+  #   cidr_blocks = ["0.0.0.0/0"]
+  # }
 
-  # Salida: Todo permitido
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-}
 
-# OUTPUTS
-output "web_sg_id" { value = aws_security_group.web_sg.id }
-output "db_sg_id" { value = aws_security_group.db_sg.id }
+  tags = {
+    Name = "taskmaster-db-sg"
+  }
+}

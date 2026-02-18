@@ -97,7 +97,7 @@ networks:
     driver: bridge
 EOF
 
-# B) Vite Config (Solo si existe carpeta frontend)
+# B) Vite Config (CORREGIDO con allowedHosts para AWS)
 if [ -d "apps/frontend" ]; then
 cat <<'EOF' > apps/frontend/vite.config.js
 import { defineConfig } from 'vite'
@@ -109,6 +109,7 @@ export default defineConfig({
     host: true,
     port: 3000,
     strictPort: true,
+    allowedHosts: true,
     watch: {
       usePolling: true
     }

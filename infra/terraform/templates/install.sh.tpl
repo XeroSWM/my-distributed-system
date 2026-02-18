@@ -18,7 +18,6 @@ usermod -aG docker ubuntu
 # 2. CLONAR EL REPOSITORIO
 # ---------------------------------------------------------
 cd /home/ubuntu
-# Si ya existe, lo borramos para asegurar una instalación limpia
 rm -rf my-distributed-system
 git clone https://github.com/XeroSWM/my-distributed-system.git
 cd my-distributed-system
@@ -28,8 +27,10 @@ chown -R ubuntu:ubuntu /home/ubuntu/my-distributed-system
 # 3. CORREGIR ARCHIVOS (SOBRESCRIBIR CON VERSIONES BUENAS)
 # ---------------------------------------------------------
 
-# A) Docker Compose (Ahora con ARGS dinámicos para el Frontend)
-cat <<'EOF' > docker-compose.yml
+# A) Docker Compose
+# NOTA: Usamos $${VAR} para que Terraform NO intente rellenar esto,
+# sino que deje que Docker Compose lea el archivo .env
+cat <<EOF > docker-compose.yml
 version: '3.8'
 services:
   database:
@@ -87,11 +88,11 @@ services:
   frontend:
     build:
       context: ./apps/frontend
-      # ESTO ES LO IMPORTANTE: Pasamos las variables del .env al build
+      # CAMBIO CRITICO: Doble signo de dolar ($$)
       args:
-        - VITE_AUTH_URL=${VITE_AUTH_URL}
-        - VITE_CORE_URL=${VITE_CORE_URL}
-        - VITE_DASHBOARD_URL=${VITE_DASHBOARD_URL}
+        - VITE_AUTH_URL=$${VITE_AUTH_URL}
+        - VITE_CORE_URL=$${VITE_CORE_URL}
+        - VITE_DASHBOARD_URL=$${VITE_DASHBOARD_URL}
     ports:
       - "80:3000"
     networks:
@@ -105,7 +106,7 @@ networks:
     driver: bridge
 EOF
 
-# B) Vite Config (Asegurar acceso externo)
+# B) Vite Config
 if [ -d "apps/frontend" ]; then
 cat <<'EOF' > apps/frontend/vite.config.js
 import { defineConfig } from 'vite'
@@ -125,18 +126,15 @@ export default defineConfig({
 })
 EOF
 
-# C) Dockerfile del Frontend (Sobrescribir para aceptar ARGumentos)
-# Esto asegura que funcione aunque el repo tenga un Dockerfile viejo
+# C) Dockerfile del Frontend
 cat <<'EOF' > apps/frontend/Dockerfile
 FROM node:18-alpine
 WORKDIR /app
 
-# Definimos los argumentos de construcción
 ARG VITE_AUTH_URL
 ARG VITE_CORE_URL
 ARG VITE_DASHBOARD_URL
 
-# Los convertimos en variables de entorno fijas para el build
 ENV VITE_AUTH_URL=$VITE_AUTH_URL
 ENV VITE_CORE_URL=$VITE_CORE_URL
 ENV VITE_DASHBOARD_URL=$VITE_DASHBOARD_URL
@@ -145,24 +143,21 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 
-# Al hacer build, Vite leerá las variables ENV de arriba
 RUN npm run build
-
-# Servidor de desarrollo/preview expuesto
 EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
 EOF
 fi
 
 # ---------------------------------------------------------
-# 4. CREAR ARCHIVO .ENV CON LAS IPs DE TERRAFORM
+# 4. CREAR ARCHIVO .ENV
 # ---------------------------------------------------------
-# Terraform sustituye ${env_file_content} con las IPs reales
+# Aquí Terraform escribirá las variables que le pasemos en main.tf
 cat <<EOF > .env
 ${env_file_content}
 EOF
 
-# Copiamos el .env también a la carpeta del frontend por si acaso
+# Copia de seguridad
 if [ -d "apps/frontend" ]; then
   cp .env apps/frontend/.env
 fi
@@ -170,5 +165,4 @@ fi
 # ---------------------------------------------------------
 # 5. ARRANCAR EL SERVICIO
 # ---------------------------------------------------------
-# Forzamos el build para que tome los cambios
 docker compose up -d --build ${service_name}

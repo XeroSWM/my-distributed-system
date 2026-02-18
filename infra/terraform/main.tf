@@ -3,7 +3,7 @@ provider "aws" {
 }
 
 # =========================================================================
-#  LLAVE SSH (Incrustada directamente)
+#  LLAVE SSH
 # =========================================================================
 resource "aws_key_pair" "taskmaster_key" {
   key_name   = "taskmaster_key"
@@ -48,10 +48,6 @@ module "server_auth" {
       DATABASE_URL=postgresql://${var.db_username}:${var.db_password}@${module.database.db_endpoint}:5432/taskmaster_db
       JWT_SECRET=secreto_automatico
     EOT
-    # CORRECCIÓN: Variables vacías para satisfacer la plantilla
-    VITE_AUTH_URL      = ""
-    VITE_CORE_URL      = ""
-    VITE_DASHBOARD_URL = ""
   })
 }
 
@@ -70,10 +66,6 @@ module "server_core" {
       DATABASE_URL=postgresql://${var.db_username}:${var.db_password}@${module.database.db_endpoint}:5432/taskmaster_db
       AUTH_SERVICE_URL=http://${module.server_auth.public_ip}:3001
     EOT
-    # CORRECCIÓN: Variables vacías
-    VITE_AUTH_URL      = ""
-    VITE_CORE_URL      = ""
-    VITE_DASHBOARD_URL = ""
   })
 }
 
@@ -91,10 +83,6 @@ module "server_dashboard" {
       PORT=3003
       DATABASE_URL=postgresql://${var.db_username}:${var.db_password}@${module.database.db_endpoint}:5432/taskmaster_db
     EOT
-    # CORRECCIÓN: Variables vacías
-    VITE_AUTH_URL      = ""
-    VITE_CORE_URL      = ""
-    VITE_DASHBOARD_URL = ""
   })
 }
 
@@ -108,12 +96,12 @@ module "server_frontend" {
 
   user_data_script = templatefile("${path.module}/templates/install.sh.tpl", {
     service_name     = "frontend"
-    env_file_content = "" # El frontend no necesita variables secretas de backend
-    
-    # CORRECCIÓN: Aquí sí pasamos las variables REALES para el build de Vite
-    VITE_AUTH_URL      = "http://${module.server_auth.public_ip}:3001"
-    VITE_CORE_URL      = "http://${module.server_core.public_ip}:3002"
-    VITE_DASHBOARD_URL = "http://${module.server_dashboard.public_ip}:3003"
+    # AQUI ESTA EL CAMBIO: Las variables VITE van DENTRO del contenido del .env
+    env_file_content = <<-EOT
+      VITE_AUTH_URL=http://${module.server_auth.public_ip}:3001
+      VITE_CORE_URL=http://${module.server_core.public_ip}:3002
+      VITE_DASHBOARD_URL=http://${module.server_dashboard.public_ip}:3003
+    EOT
   })
 }
 

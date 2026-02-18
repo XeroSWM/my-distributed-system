@@ -5,7 +5,7 @@
 # 1. Buscar la última imagen de Ubuntu (AMI) automáticamente
 data "aws_ami" "ubuntu" {
   most_recent = true
-  owners      = ["099720109477"] # Canonical
+  owners      = ["099720109477"] # Canonical (Dueño oficial de Ubuntu)
 
   filter {
     name   = "name"
@@ -19,22 +19,23 @@ data "aws_ami" "ubuntu" {
 }
 
 # (ELIMINADO: resource "aws_key_pair" "deployer")
-# Ya no creamos la llave aquí, usamos la que viene del root.
+# Ya no creamos la llave aquí para evitar conflictos de nombres.
+# La llave se recibe desde el main.tf principal mediante var.key_name.
 
 # 2. Crear la Instancia EC2 (El Servidor)
 resource "aws_instance" "web" {
   ami           = data.aws_ami.ubuntu.id
-  instance_type = var.instance_type
+  instance_type = var.instance_type # Usamos t2.medium para Docker
   
   subnet_id     = var.subnet_id
   
   # Seguridad
   vpc_security_group_ids = [var.security_group_id]
   
-  # AQUI EL CAMBIO: Usamos la variable key_name en lugar de crearla
+  # Usamos la llave que definimos globalmente
   key_name               = var.key_name
 
-  # Script de inicio
+  # Script de inicio (Instala Docker, clona repo y levanta contenedores)
   user_data                   = var.user_data_script
   user_data_replace_on_change = true
 
@@ -44,6 +45,7 @@ resource "aws_instance" "web" {
 }
 
 # 3. Asignar IP Pública Estática (Elastic IP)
+# Esto evita que la IP cambie si reinicias la instancia
 resource "aws_eip" "web_ip" {
   instance = aws_instance.web.id
   domain   = "vpc"
@@ -52,3 +54,6 @@ resource "aws_eip" "web_ip" {
     Name = "${var.instance_name}-IP"
   }
 }
+
+# --- FIN DEL ARCHIVO ---
+# Los outputs (public_ip, etc.) se quedan UNICAMENTE en outputs.tf

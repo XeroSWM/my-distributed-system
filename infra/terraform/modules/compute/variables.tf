@@ -8,10 +8,9 @@ variable "security_group_id" {
   type        = string
 }
 
-# (ELIMINADO: variable "public_key") 
-# (AGREGADO: variable "key_name")
+# CAMBIO AQUÍ: Eliminamos public_key y agregamos key_name
 variable "key_name" {
-  description = "Nombre de la llave SSH ya existente en AWS (creada en root)"
+  description = "Nombre de la llave SSH ya existente en AWS"
   type        = string
 }
 
@@ -21,14 +20,13 @@ variable "instance_name" {
 }
 
 variable "user_data_script" {
-  description = "Script Bash de inicio (User Data) para configurar Docker"
+  description = "Script Bash de inicio para configurar Docker"
   type        = string
   default     = ""
 }
 
-# --- NUEVA: Para poder cambiar de tamaño fácil ---
 variable "instance_type" {
-  description = "Tipo de instancia EC2. Recomendado: t2.medium para Docker/Node"
+  description = "Tipo de instancia EC2"
   type        = string
   default     = "t2.medium"
 }

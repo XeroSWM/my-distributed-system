@@ -3,11 +3,12 @@ provider "aws" {
 }
 
 # =========================================================================
-#  LLAVE SSH
+#  LLAVE SSH (Usando variable desde terraform.tfvars)
 # =========================================================================
 resource "aws_key_pair" "taskmaster_key" {
   key_name   = "taskmaster_key"
-  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDkTTC3g1VKkXnrNDjXbHMl6AeNlfKurCHLWF06sIbPtIojfnyGdUq56Ci7Gie1KS5Rskhs8CbzwkXSwxUNu4UYlKxJAC5aoXfUdswEk5zdjUruS1u1cfC0FIz3n55s85fw3KoU54kxpli5vk+VbKfGbs3CpJetgv7Smbw3GtS6Nf1Qv/w/siSiV2DMNXnh6OwRboK6gvvAUk2VpWgKRI6hLwTCNm/mUdxIe9WpKP6myV/jg3Ycbns/jNylky+WT+xlI+YHYrZULv0H0VhF2NOgLlK8OlMg1do/uS7RXyYCPC0GltvcpUiZ5i57yWCDztXAbPmkqgSH8wcQ/5YAi2sMhl6AHKziMqnRER6BBFqP6IA/8O1d505d8M2UGAyN1somhlS9T/8XIwAZZsppRgZRUFcrgNG4tjRnSaQEbRpIwCvyik340Jgi56QAeI0GWku0Bq28toDXZfbvPsed0gLradbXzGUf4sqi5lVgHQmdvQE/1WXZ3kfB5XJjTqCCA+EHuiA9ZlKUKutHq03r9v784Z5WcgNZUc0fOFOPQv99GcjkUGQEa6wPDMYeWgxccSrFZGKbbCKIxeGUJbOfZEYWW6865gXqKZqXzGDWzy80rLKoHsU3lWXokCEx/Zdo7TzAReD1stgUGtNsD/bqGJzpL9ocq9+wHfx52KPnYEXpWQ== admin@DESKTOP-G2UPF9K"
+  # AQUI EL CAMBIO: Leemos la llave de tu archivo de variables
+  public_key = var.my_public_ssh_key
 }
 
 # =========================================================================
@@ -25,6 +26,7 @@ module "database" {
   source            = "./modules/database"
   subnet_ids        = module.networking.public_subnets
   security_group_id = module.security.db_sg_id
+  # Estas variables vienen de tu terraform.tfvars
   db_username       = var.db_username
   db_password       = var.db_password
 }
@@ -96,7 +98,8 @@ module "server_frontend" {
 
   user_data_script = templatefile("${path.module}/templates/install.sh.tpl", {
     service_name     = "frontend"
-    # AQUI ESTA EL CAMBIO: Las variables VITE van DENTRO del contenido del .env
+    # ESTO EVITA EL ERROR DE ARGUMENTOS:
+    # Metemos las variables VITE dentro del contenido del .env directamente
     env_file_content = <<-EOT
       VITE_AUTH_URL=http://${module.server_auth.public_ip}:3001
       VITE_CORE_URL=http://${module.server_core.public_ip}:3002

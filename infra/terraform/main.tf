@@ -106,4 +106,6 @@ output "IP_AUTH" { value = module.server_auth.public_ip }
 output "IP_CORE" { value = module.server_core.public_ip }
 output "IP_DASHBOARD" { value = module.server_dashboard.public_ip }
 output "IP_FRONTEND" { value = module.server_frontend.public_ip }
-output "URL_APP" { value = "http://${module.server_frontend.public_dns}:3000" }
+output "URL_APP" { 
+  value = "http://${module.server_frontend.public_ip}" 
+}

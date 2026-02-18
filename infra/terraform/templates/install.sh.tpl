@@ -19,10 +19,14 @@ apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 usermod -aG docker ubuntu
 
-# 2. CLONAR EL REPOSITORIO
+# 2. CLONAR EL REPOSITORIO (RAMA QA)
 cd /home/ubuntu
 rm -rf my-distributed-system
-git clone https://github.com/XeroSWM/my-distributed-system.git
+
+# --- AQUÍ ESTÁ EL CAMBIO CLAVE ---
+# Usamos "-b qa" para bajar solo esa rama
+git clone -b qa https://github.com/XeroSWM/my-distributed-system.git
+
 cd my-distributed-system
 chown -R ubuntu:ubuntu /home/ubuntu/my-distributed-system
 
@@ -31,7 +35,7 @@ cat <<EOF > .env
 ${env_file_content}
 EOF
 
-# 4. CONFIGURAR DOCKER FILES
+# 4. CONFIGURAR DOCKER FILES (Dinámicos)
 cat <<EOF > docker-compose.yml
 version: '3.8'
 services:
@@ -87,11 +91,10 @@ services:
     depends_on:
       - database
 
-  # === NUEVO: API GATEWAY SERVICE ===
   api-gateway:
     build: ./apps/api-gateway
     ports:
-      - "80:8000" # Exponemos el puerto 8000 del contenedor al puerto 80 del servidor
+      - "80:8000"
     networks:
       - app-network
 

@@ -9,22 +9,36 @@ function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/auth/login', {
+      // ---------------------------------------------------------
+      // CAMBIO IMPORTANTE AQUÍ:
+      // Usamos la variable de entorno que Terraform inyectó.
+      // VITE_AUTH_URL ya trae "http://IP_DEL_GATEWAY/api/auth"
+      // ---------------------------------------------------------
+      const apiUrl = `${import.meta.env.VITE_AUTH_URL}/login`;
+      
+      console.log("Intentando conectar a:", apiUrl); // Para depurar si falla
+
+      const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
+
       const data = await res.json();
+      
       if (res.ok && data.token) {
         localStorage.setItem('token', data.token);
         navigate('/dashboard');
       } else {
-        alert('Error: ' + (data.error || 'Credenciales incorrectas'));
+        alert('Error: ' + (data.message || data.error || 'Credenciales incorrectas'));
       }
-    } catch (err) { console.error(err); alert('Error de conexión'); }
+    } catch (err) { 
+      console.error(err); 
+      alert('Error de conexión con el servidor'); 
+    }
   };
 
-  // --- ESTILOS MEJORADOS ---
+  // ... (TUS ESTILOS SE QUEDAN IGUAL, ESTÁN PERFECTOS) ...
   const styles = {
     container: {
       minHeight: '100vh',
@@ -32,17 +46,17 @@ function Login() {
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: '#121212', // Negro profundo
+      backgroundColor: '#121212',
       color: '#e0e0e0',
       fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
     },
     card: {
-      backgroundColor: '#1e1e1e', // Gris oscuro elegante
+      backgroundColor: '#1e1e1e',
       padding: '40px',
       borderRadius: '16px',
       boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
       width: '100%',
-      maxWidth: '420px', // Un poco más ancho para que no se rompa el texto
+      maxWidth: '420px',
       textAlign: 'center',
       border: '1px solid #333'
     },
@@ -67,12 +81,12 @@ function Login() {
       color: 'white',
       fontSize: '16px',
       outline: 'none',
-      boxSizing: 'border-box' // Importante para que el padding no rompa el ancho
+      boxSizing: 'border-box'
     },
     button: {
       width: '100%',
       padding: '14px',
-      backgroundColor: '#3b82f6', // Azul moderno
+      backgroundColor: '#3b82f6',
       color: 'white',
       border: 'none',
       borderRadius: '8px',

@@ -9,22 +9,31 @@ function Register() {
   const handleRegister = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${import.meta.env.VITE_AUTH_URL}/api/auth/register`, {
+      // ---------------------------------------------------------
+      // CORRECCIÓN AQUÍ:
+      // Quitamos "/api/auth" porque la variable VITE_AUTH_URL ya lo trae.
+      // ---------------------------------------------------------
+      const res = await fetch(`${import.meta.env.VITE_AUTH_URL}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
+      
       const data = await res.json();
+      
       if (res.ok) {
-        alert('¡Cuenta creada! Inicia sesión.');
+        alert('¡Cuenta creada con éxito! Ahora inicia sesión.');
         navigate('/');
       } else {
-        alert('Error: ' + (data.error || 'Error al registrar'));
+        alert('Error: ' + (data.message || data.error || 'Error al registrar'));
       }
-    } catch (err) { console.error(err); alert('Error de conexión'); }
+    } catch (err) { 
+      console.error(err); 
+      alert('Error de conexión con el servidor'); 
+    }
   };
 
-  // Reutilizamos los estilos del Login para consistencia
+  // ... (TUS ESTILOS ESTÁN PERFECTOS, NO HACE FALTA CAMBIARLOS) ...
   const styles = {
     container: {
       minHeight: '100vh',
@@ -53,9 +62,10 @@ function Register() {
       backgroundColor: '#2c2c2c', color: 'white', fontSize: '16px', outline: 'none', boxSizing: 'border-box'
     },
     button: {
-      width: '100%', padding: '14px', backgroundColor: '#10b981', // Verde esmeralda para registro
+      width: '100%', padding: '14px', backgroundColor: '#10b981', // Verde esmeralda
       color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px',
-      fontWeight: 'bold', cursor: 'pointer', marginTop: '10px'
+      fontWeight: 'bold', cursor: 'pointer', marginTop: '10px',
+      transition: 'background 0.2s'
     },
     footer: { marginTop: '25px', fontSize: '14px', color: '#aaa' },
     link: { background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', textDecoration: 'underline', marginLeft: '5px' }
@@ -82,7 +92,12 @@ function Register() {
             style={styles.input}
           />
           
-          <button type="submit" style={styles.button}>
+          <button 
+            type="submit" 
+            style={styles.button}
+            onMouseOver={(e) => e.target.style.backgroundColor = '#059669'}
+            onMouseOut={(e) => e.target.style.backgroundColor = '#10b981'}
+          >
             CREAR CUENTA
           </button>
         </form>

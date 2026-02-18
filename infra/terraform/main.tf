@@ -7,7 +7,6 @@ provider "aws" {
 # =========================================================================
 resource "aws_key_pair" "taskmaster_key" {
   key_name   = "taskmaster_key"
-  # AQUI EL CAMBIO: Leemos la llave de tu archivo de variables
   public_key = var.my_public_ssh_key
 }
 
@@ -26,13 +25,12 @@ module "database" {
   source            = "./modules/database"
   subnet_ids        = module.networking.public_subnets
   security_group_id = module.security.db_sg_id
-  # Estas variables vienen de tu terraform.tfvars
   db_username       = var.db_username
   db_password       = var.db_password
 }
 
 # =========================================================================
-#  SERVIDORES
+#  MICROSERVICIOS (BACKEND)
 # =========================================================================
 
 # --- 1. Servicio Auth ---
@@ -66,7 +64,8 @@ module "server_core" {
     env_file_content = <<-EOT
       PORT=3002
       DATABASE_URL=postgresql://${var.db_username}:${var.db_password}@${module.database.db_endpoint}:5432/taskmaster_db
-      AUTH_SERVICE_URL=http://${module.server_auth.public_ip}:3001
+      # USAMOS IP PRIVADA PARA COMUNICACIÓN INTERNA (Más rápido)
+      AUTH_SERVICE_URL=http://${module.server_auth.private_ip}:3001
     EOT
   })
 }
@@ -88,7 +87,37 @@ module "server_dashboard" {
   })
 }
 
-# --- 4. Frontend ---
+# =========================================================================
+#  API GATEWAY (EL NUEVO CEREBRO)
+# =========================================================================
+
+# --- 4. API Gateway (Node.js Service) ---
+# Este servicio recibe las peticiones del frontend y las reparte a los backends
+module "gateway" {
+  source            = "./modules/compute"
+  subnet_id         = module.networking.public_subnets[0]
+  security_group_id = module.security.web_sg_id
+  instance_name     = "TM-API-Gateway"
+  key_name          = aws_key_pair.taskmaster_key.key_name
+
+  user_data_script = templatefile("${path.module}/templates/install.sh.tpl", {
+    service_name     = "api-gateway"
+    
+    # Pasamos las IPs PRIVADAS para que el Gateway hable internamente con los servicios
+    env_file_content = <<-EOT
+      PORT=8000
+      AUTH_SERVICE_URL=http://${module.server_auth.private_ip}:3001
+      CORE_SERVICE_URL=http://${module.server_core.private_ip}:3002
+      DASHBOARD_SERVICE_URL=http://${module.server_dashboard.private_ip}:3003
+    EOT
+  })
+}
+
+# =========================================================================
+#  FRONTEND
+# =========================================================================
+
+# --- 5. Frontend ---
 module "server_frontend" {
   source            = "./modules/compute"
   subnet_id         = module.networking.public_subnets[0]
@@ -98,12 +127,13 @@ module "server_frontend" {
 
   user_data_script = templatefile("${path.module}/templates/install.sh.tpl", {
     service_name     = "frontend"
-    # ESTO EVITA EL ERROR DE ARGUMENTOS:
-    # Metemos las variables VITE dentro del contenido del .env directamente
+    
+    # EL CAMBIO FINAL: El frontend solo conoce al Gateway (Puerto 80/HTTP estándar)
+    # Esto elimina los problemas de CORS y oculta la infraestructura real.
     env_file_content = <<-EOT
-      VITE_AUTH_URL=http://${module.server_auth.public_ip}:3001
-      VITE_CORE_URL=http://${module.server_core.public_ip}:3002
-      VITE_DASHBOARD_URL=http://${module.server_dashboard.public_ip}:3003
+      VITE_AUTH_URL=http://${module.gateway.public_ip}/api/auth
+      VITE_CORE_URL=http://${module.gateway.public_ip}/api/core
+      VITE_DASHBOARD_URL=http://${module.gateway.public_ip}/api/dashboard
     EOT
   })
 }
@@ -113,9 +143,7 @@ module "server_frontend" {
 # =========================================================================
 
 output "DB_HOST" { value = module.database.db_endpoint }
-output "IP_AUTH" { value = module.server_auth.public_ip }
-output "IP_CORE" { value = module.server_core.public_ip }
-output "IP_DASHBOARD" { value = module.server_dashboard.public_ip }
+output "IP_GATEWAY" { value = module.gateway.public_ip }
 output "IP_FRONTEND" { value = module.server_frontend.public_ip }
 output "URL_APP" { 
   value = "http://${module.server_frontend.public_ip}" 

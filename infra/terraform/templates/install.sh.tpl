@@ -1,9 +1,14 @@
 #!/bin/bash
 set -e
 
-# ---------------------------------------------------------
+# 0. MEMORIA SWAP (Anti-Caídas)
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
+
 # 1. INSTALAR DOCKER
-# ---------------------------------------------------------
 apt-get update
 apt-get install -y ca-certificates curl gnupg git
 install -m 0755 -d /etc/apt/keyrings
@@ -14,41 +19,19 @@ apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 usermod -aG docker ubuntu
 
-# ---------------------------------------------------------
 # 2. CLONAR EL REPOSITORIO
-# ---------------------------------------------------------
 cd /home/ubuntu
 rm -rf my-distributed-system
 git clone https://github.com/XeroSWM/my-distributed-system.git
 cd my-distributed-system
 chown -R ubuntu:ubuntu /home/ubuntu/my-distributed-system
 
-# ---------------------------------------------------------
-# 3. CONFIGURAR VARIABLES DE ENTORNO
-# ---------------------------------------------------------
-
-# A) Crear el archivo .env global (para los backends)
+# 3. CREAR ARCHIVO .ENV GLOBAL
 cat <<EOF > .env
 ${env_file_content}
 EOF
 
-# B) ESTRATEGIA SEGURA PARA EL FRONTEND:
-# Escribimos el .env directamente dentro de la carpeta del frontend.
-# Vite leerá este archivo automáticamente al hacer el build.
-if [ -d "apps/frontend" ]; then
-  echo "Configurando .env del Frontend..."
-  cp .env apps/frontend/.env
-  
-  # IMPORTANTE: Borramos .dockerignore si existe para asegurar 
-  # que Docker COPIE el archivo .env dentro de la imagen.
-  rm -f apps/frontend/.dockerignore
-fi
-
-# ---------------------------------------------------------
-# 4. CONFIGURAR DOCKER FILES (Sobrescribir para garantizar éxito)
-# ---------------------------------------------------------
-
-# A) Docker Compose (Simplificado: Sin ARGS)
+# 4. CONFIGURAR DOCKER FILES
 cat <<EOF > docker-compose.yml
 version: '3.8'
 services:
@@ -104,10 +87,23 @@ services:
     depends_on:
       - database
 
-  frontend:
-    build: ./apps/frontend
+  # === NUEVO: API GATEWAY SERVICE ===
+  api-gateway:
+    build: ./apps/api-gateway
     ports:
-      - "80:3000"
+      - "80:8000" # Exponemos el puerto 8000 del contenedor al puerto 80 del servidor
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./apps/frontend
+      args:
+        - VITE_AUTH_URL=$${VITE_AUTH_URL}
+        - VITE_CORE_URL=$${VITE_CORE_URL}
+        - VITE_DASHBOARD_URL=$${VITE_DASHBOARD_URL}
+    ports:
+      - "3000:3000"
     networks:
       - app-network
 
@@ -119,7 +115,7 @@ networks:
     driver: bridge
 EOF
 
-# B) Vite Config (Asegurar acceso externo)
+# Vite Config (Frontend)
 if [ -d "apps/frontend" ]; then
 cat <<'EOF' > apps/frontend/vite.config.js
 import { defineConfig } from 'vite'
@@ -139,24 +135,24 @@ export default defineConfig({
 })
 EOF
 
-# C) Dockerfile del Frontend (Simplificado)
-# Ya no usa ARGS, confía en que el .env está en la carpeta y se copia.
+# Dockerfile Frontend
 cat <<'EOF' > apps/frontend/Dockerfile
 FROM node:18-alpine
 WORKDIR /app
+ARG VITE_AUTH_URL
+ARG VITE_CORE_URL
+ARG VITE_DASHBOARD_URL
+ENV VITE_AUTH_URL=$VITE_AUTH_URL
+ENV VITE_CORE_URL=$VITE_CORE_URL
+ENV VITE_DASHBOARD_URL=$VITE_DASHBOARD_URL
 COPY package*.json ./
 RUN npm install
-# Al copiar todo, se copia también el .env que creamos arriba
 COPY . .
-# Vite leerá el .env aquí durante el build
 RUN npm run build
 EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
 EOF
 fi
 
-# ---------------------------------------------------------
 # 5. ARRANCAR EL SERVICIO
-# ---------------------------------------------------------
-# --build fuerza a que se vuelva a crear la imagen con el nuevo .env
 docker compose up -d --build ${service_name}
